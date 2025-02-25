@@ -48,20 +48,58 @@ app.get('/', async (req, res) => {
   res.send("Hellw");
 });
 
-app.post('/MediaRank', async (req, res) => {
-  /// res.status(200).json(req.body);
-  // Check if request body is empty and fill with default values
-  if (!req.body.name || !req.body.email) {
-    req.body.name = req.body.name || "err";
-    req.body.email = req.body.email || "err";
-  }
 
+app.post('/MediaRank', async (req, res) => {
   try {
-    const user = new User({ name: req.body.name, email: req.body.email });
-    await user.save();
-    res.status(201).json(user);
+    const { usuario, contenido = [], votos = [] } = req.body;
+
+    if (!usuario?.nombre || !usuario?.email) {
+      return res.status(400).json({ message: "Nombre y email son obligatorios" });
+    }
+
+    const newUser = new User({ usuario, contenido, votos });
+    await newUser.save();
+
+    res.status(201).json({ message: "Usuario creado con éxito", user: newUser });
   } catch (err) {
-    res.status(400).json({ message: 'Error creating user', error: err.message });
+    res.status(500).json({ message: "Error al crear usuario", error: err.message });
+  }
+});
+
+app.get('/MediaRank/vote', async (req, res) => {
+  try {
+    const users = await User.find({}, 'votos');
+    const voteCount = {};
+
+    users.forEach(user => {
+      user.votos.forEach(({ titulo }) => {
+        voteCount[titulo] = (voteCount[titulo] || 0) + 1;
+      });
+    });
+
+    res.status(200).json(Object.entries(voteCount).map(([titulo, total_votos]) => ({ titulo, total_votos })));
+  } catch (err) {
+    res.status(500).json({ message: 'Error obteniendo votos', error: err.message });
+  }
+});
+
+app.get('/MediaRank/:dataini/:datafi', async (req, res) => {
+  try {
+    const startDate = new Date(req.params.dataini);
+    const endDate = new Date(req.params.datafi);
+
+    if (isNaN(startDate) || isNaN(endDate)) {
+      return res.status(400).json({ message: "Fechas no válidas. Usa formato YYYY-MM-DD" });
+    }
+
+    const users = await User.find({}, 'contenido');
+    const filteredContent = users.flatMap(user =>
+      user.contenido.filter(({ fecha_subida }) => fecha_subida >= startDate && fecha_subida <= endDate)
+    );
+
+    res.status(200).json(filteredContent);
+  } catch (err) {
+    res.status(500).json({ message: 'Error obteniendo contenido', error: err.message });
   }
 });
 
@@ -72,49 +110,6 @@ app.get('/MediaRank', async (req, res) => {
     res.status(200).json(users);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching users', error: err.message });
-  }
-});
-
-// Ruta per obtenir un usuari per ID
-app.get('/MediaRank/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json(user);
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching user', error: err.message });
-  }
-});
-
-// Ruta per actualitzar un usuari per ID
-app.put('/MediaRank/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, email } = req.body;
-  try {
-    const user = await User.findByIdAndUpdate(id, { name, email }, { new: true });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json(user);
-  } catch (err) {
-    res.status(400).json({ message: 'Error updating user', error: err.message });
-  }
-});
-
-// Ruta per eliminar un usuari per ID
-app.delete('/MediaRank/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const user = await User.findByIdAndDelete(id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json({ message: 'User deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Error deleting user', error: err.message });
   }
 });
 
